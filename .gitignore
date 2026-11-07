@@ -1,0 +1,38 @@
+# Qt / qmake build output
+/build*/
+/debug/
+/release/
+Makefile
+Makefile.*
+.qmake.stash
+.qmake.cache
+*.o
+*.obj
+*.exe
+*.dll
+moc_*.cpp
+moc_predefs.h
+qrc_*.cpp
+ui_*.h
+
+# Local IDE settings
+*.pro.user
+*.pro.user.*
+*.autosave
+.vscode/
+.idea/
+
+# Local logs and verification output
+*.log
+/test-failure.txt
+/verify-output/
+
+# Local credentials
+.env
+.env.*
+*.pem
+*.key
+
+# OS metadata
+.DS_Store
+Thumbs.db
