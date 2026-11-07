@@ -27,13 +27,13 @@
 
 ## 从源码编译
 
-使用 Qt Creator 打开 src/PenumbraTraining.pro，选择 Qt 6 的 Desktop MinGW 64-bit 套件，构建并运行。当前验证环境为 Qt 6.5.3、MinGW 11.2 与 Windows 64 位。
+使用 Qt Creator 打开 PenumbraTraining.pro，选择 Qt 6 的 Desktop MinGW 64-bit 套件，构建并运行。当前验证环境为 Qt 6.5.3、MinGW 11.2 与 Windows 64 位。
 
 也可以在配置好 Qt 和 MinGW 的命令行中构建：
 
     mkdir build
     cd build
-    qmake ../src/PenumbraTraining.pro
+    qmake ../PenumbraTraining.pro
     mingw32-make
 
 源码使用 Qt Widgets 和 Windows winmm 音频。角色、地形、光源和战斗效果由 QPainter 绘制。
@@ -48,9 +48,9 @@
 
 ## 画面
 
-![主界面](screenshots/title.png)
+![主界面](screens/title.png)
 
-![选关](screenshots/level-select.png)
+![选关](screens/select.png)
 
 ## 第三方组件
 
