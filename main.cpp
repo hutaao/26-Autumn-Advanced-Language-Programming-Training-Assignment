@@ -1499,6 +1499,19 @@ public:
         if(cursor().shape()!=Qt::ArrowCursor){
             qWarning()<<"Reset left the dragging cursor active";return false;
         }
+        // Defeated bosses must not retain invisible lamp blockers or attacks.
+        beginSector(4,true);boss.hp=1;boss.open=1;boss.active=true;
+        boss.globs.push_back({P(1210,465),P(1210,465),true});
+        boss.laserTime=.4;boss.laser=QLineF(boss.core,hero);
+        boss.flight=.5;boss.winding=true;boss.charging=true;
+        flashes={QLineF(boss.core-P(30,0),boss.core+P(30,0))};cutWarden();
+        if(boss.hp!=0||!boss.globs.isEmpty()||lensBlocked()||boss.laserTime!=0||
+           !boss.laser.isNull()||boss.flight!=0||boss.winding||boss.charging){
+            qWarning()<<"Defeated boss retained hazards or lamp blockers";return false;
+        }
+        if(doorOpen()){qWarning()<<"Boss defeat bypassed the passage puzzle";return false;}
+        passageFound=true;stacks.removeOne(shutter);
+        if(!doorOpen()){qWarning()<<"Boss defeat did not unlock the cleared exit";return false;}
         return verifySectorNavigation()&&verifyBlindroomPlaythrough(path);
     }
 };

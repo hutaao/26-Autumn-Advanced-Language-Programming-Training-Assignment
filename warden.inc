@@ -113,7 +113,9 @@
         }
         if(!boss.hp||boss.open<=0)return;
         for(auto blade:flashes)if(segmentDistance(boss.core,blade)<27){
-            --boss.hp;if(boss.hp==4)deployGlobs();boss.grace=.5;boss.heat=0;boss.open=0;boss.clock=.45;boss.charging=false;++boss.volley;chooseFlight(false);
+            --boss.hp;if(boss.hp==4)deployGlobs();boss.grace=.5;boss.heat=0;boss.open=0;boss.clock=.45;boss.charging=false;++boss.volley;
+            if(boss.hp>0)chooseFlight(false);
+            else{boss.globs.clear();boss.laserTime=0;boss.laser=QLineF();boss.flight=0;boss.winding=false;}
             boss.shots.clear();impactPoint=boss.core;ignite(blade);return;
         }
     }
