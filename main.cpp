@@ -1536,6 +1536,16 @@ public:
         stepWarden(.016);if(hearts!=3||boss.open>0)return false;
         boss.lightDir=normalized(P(3,-.25));stepWarden(.016);
         if(hearts!=2||boss.open>0)return false;
+        // Expired lasers cannot damage; a laser still visible after the step can.
+        for(double remaining:{.008,.016,.032}){
+            boss.laserTime=remaining;hearts=3;immunity=0;
+            stepWarden(.016);
+            const bool active=remaining>.016;
+            if(hearts!=(active?2:3)||boss.laserTime!=std::max(0.,remaining-.016)){
+                qWarning()<<"Laser expiry damage mismatch at remaining time"<<remaining;
+                return false;
+            }
+        }
         boss.hp=4;boss.volley=1;boss.winding=true;boss.clock=0;boss.aim=west;
         stepWarden(.016);if(boss.shots.size()<17)return false;
         grab().save(path+"/warden-barrage.png");

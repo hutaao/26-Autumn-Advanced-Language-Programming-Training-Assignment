@@ -57,8 +57,9 @@
                 boss.laserTime=0;boss.clock=.65;play(3);
             }
         }
+        boss.laserTime=std::max(0.,boss.laserTime-dt);
         if(boss.laserTime>0){
-            boss.laserTime-=dt;boss.laser=laserTrace(boss.laserOrigin,boss.laserDir);
+            boss.laser=laserTrace(boss.laserOrigin,boss.laserDir);
             if(!litAt(hero)&&boss.laser.length()>1&&segmentDistance(hero,boss.laser)<8&&immunity<=0&&dashLeft<=0){
                 loseHeart();immunity=1.3;
             }
