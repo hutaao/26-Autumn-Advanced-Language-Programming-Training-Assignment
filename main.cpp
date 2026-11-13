@@ -511,7 +511,7 @@ class Training : public QWidget {
     }
     void reset(){
         projectors.clear();draggedProjector=-1;heard.clear();rays.clear();sector=-1;relays.clear();stacks.clear();scanned=false;facesLeft=false;waveStart=-20;lampHandled=exposureArmed=false;chapter=finished=false;camera=0;hearts=3;exposure=0;entered=time;transitioning=false;lesson=Move;hero={145,340};pointer=marker;lamp={535,159};
-        held.clear();hurtAt=-20;retiredAt=-20;cracks.clear();flashes.clear();dragging=false;
+        held.clear();hurtAt=-20;retiredAt=-20;cracks.clear();flashes.clear();dragging=false;unsetCursor();
         dashLeft=cooldown=flash=settle=hit=walkPhase=hintTime=0; bufferedCut=false;
     }
     void tell(QString s){hint=s;hintTime=2.1;}
@@ -1105,7 +1105,7 @@ class Training : public QWidget {
     void mouseReleaseEvent(QMouseEvent*e)override{if(e->button()==Qt::LeftButton){dragging=false;draggedProjector=-1;unsetCursor();}}
     void keyPressEvent(QKeyEvent*e)override{if(e->isAutoRepeat())return;if(page!=Playing){if(e->key()==Qt::Key_Return)menuAction(page==Title?chooseButton.center():course.center());else if(e->key()==Qt::Key_Escape){if(page==Title)close();else page=Title;}return;}if(e->key()==Qt::Key_Space){pulse();return;}if(e->key()==Qt::Key_Escape){reset();page=Select;return;}if(e->key()==Qt::Key_R){if(sector>=0)beginSector(sector,true);else if(chapter)startChapter(true);else reset();unsetCursor();}else held.insert(e->key());}
     void keyReleaseEvent(QKeyEvent*e)override{if(!e->isAutoRepeat())held.remove(e->key());}
-    void focusOutEvent(QFocusEvent*)override{held.clear();dragging=false;draggedProjector=-1;unsetCursor();}
+    void focusOutEvent(QFocusEvent*)override{held.clear();bufferedCut=false;dragging=false;draggedProjector=-1;unsetCursor();}
 public:
     Training(){resize(1000,615);setMinimumSize(750,462);setMouseTracking(true);setFocusPolicy(Qt::StrongFocus);
         setWindowTitle("光与影");prepareTones();elapsed.start();
@@ -1485,6 +1485,19 @@ public:
         runChapter(.04);
         if(guards[0].pos.x()>=982||!chapterFloor(guards[0].pos)){
             qWarning()<<"Guard charge crossed an obstacle";return false;
+        }
+        // Losing focus cancels pending input without consuming existing cracks.
+        beginSector(0,true);held.insert(Qt::Key_D);bufferedCut=true;
+        dragging=true;draggedProjector=0;setCursor(Qt::ClosedHandCursor);
+        cracks={QLineF(hero-P(20,0),hero)};
+        QFocusEvent focusLost(QEvent::FocusOut);QApplication::sendEvent(this,&focusLost);
+        if(!held.isEmpty()||bufferedCut||dragging||draggedProjector!=-1||
+           cursor().shape()!=Qt::ArrowCursor||cracks.size()!=1){
+            qWarning()<<"Focus loss left pending input or dragging state";return false;
+        }
+        setCursor(Qt::ClosedHandCursor);reset();
+        if(cursor().shape()!=Qt::ArrowCursor){
+            qWarning()<<"Reset left the dragging cursor active";return false;
         }
         return verifySectorNavigation()&&verifyBlindroomPlaythrough(path);
     }
