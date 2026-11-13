@@ -394,7 +394,7 @@ class Training : public QWidget {
         projectors.clear();draggedProjector=-1;
         exitPoint={1685,268};kitPosition=sector==1?P(1720,475):P(1304,340);safeBank={1119,340};calibration=!retry;medkit=true;damageAt=healedAt=-50;
         heard.clear();rays.clear();waveStart=-20;exposure=0;chapter=true;finished=false;lesson=Complete;arrival=time;dragging=false;draggedProjector=-1;unsetCursor();
-        hurtAt=retiredAt=-20;cracks.clear();flashes.clear();dashLeft=flash=hit=cooldown=0;
+        hurtAt=retiredAt=-20;cracks.clear();flashes.clear();dashLeft=flash=hit=cooldown=0; bufferedCut=false;
         stageLamp={805,114};guards.clear();
         for(P at:{P(1410,333),P(1535,315)})guards.push_back({at,at,{},double(guards.size())*2.4});
         for(auto &g:guards)g.hp=1;
@@ -512,7 +512,7 @@ class Training : public QWidget {
     void reset(){
         projectors.clear();draggedProjector=-1;heard.clear();rays.clear();sector=-1;relays.clear();stacks.clear();scanned=false;facesLeft=false;waveStart=-20;lampHandled=exposureArmed=false;chapter=finished=false;camera=0;hearts=3;exposure=0;entered=time;transitioning=false;lesson=Move;hero={145,340};pointer=marker;lamp={535,159};
         held.clear();hurtAt=-20;retiredAt=-20;cracks.clear();flashes.clear();dragging=false;
-        dashLeft=cooldown=flash=settle=hit=walkPhase=hintTime=0;
+        dashLeft=cooldown=flash=settle=hit=walkPhase=hintTime=0; bufferedCut=false;
     }
     void tell(QString s){hint=s;hintTime=2.1;}
     void advance(Lesson next){previousLesson=lesson;transitioning=true;entered=time;lesson=next;hintTime=0;play(3);}
@@ -1125,6 +1125,10 @@ public:
                 if(open){
                     for(const auto &r:relays)if(!reachable(r.pos))return false;
                     for(const auto &g:guards)if(!reachable(g.home))return false;
+                    if(medkit&&!reachable(kitPosition)){
+                        qWarning()<<"Unreachable medkit in sector"<<n+1<<"at"<<kitPosition;
+                        return false;
+                    }
                 }
             }
         }
@@ -1250,7 +1254,11 @@ public:
         // Lower maintenance aisle avoids the northern crossing. Sound bounces off
         // the southern boundary into the receiver before the cut is attempted.
         if(!scanNiche()||!lampAt(1040)||!walk({850,498})||!walk({1030,498})||!duel(1,{1035,474})||!walk({1515,498}))return fail(__LINE__);
-        echoNow();if(!relays[0].seen)return fail(__LINE__);
+        echoNow();
+        if(!relays[0].seen){
+            qWarning()<<"Sector 2: reflected echo did not reveal the relay";
+            return fail(__LINE__);
+        }
         if(!chargeRelay(relays[0]))return fail(__LINE__);if(!relays[0].cut)return fail(__LINE__);
         for(int x=799;x<=1400&&guards[0].armored;x+=5){
             if(!lampAt(x))return fail(__LINE__);
@@ -1375,13 +1383,24 @@ public:
         auto frames=[&](int n){while(n--)tick(.016);};
         QKeyEvent down(QEvent::KeyPress,Qt::Key_D,Qt::NoModifier);QApplication::sendEvent(this,&down);frames(55);
         QKeyEvent up(QEvent::KeyRelease,Qt::Key_D,Qt::NoModifier);QApplication::sendEvent(this,&up);
-        if(lesson!=Dash)return false;
+        if(lesson!=Dash){
+            qWarning()<<"Tutorial: reaching the movement marker did not start the dash lesson";
+            return false;
+        }
         if(!hitsGuard(dummy,QLineF(dummy+P(-45,-33),dummy+P(45,-33)))||
             hitsGuard(dummy,QLineF(dummy+P(-45,-65),dummy+P(45,-65))))return false;
         mouse(QEvent::MouseButtonPress,dummy,Qt::LeftButton,Qt::LeftButton);frames(21);
-        if(lesson!=Sheathe||cracks.size()!=1)return false;grab().save(path+"/fracture.png");
+        if(lesson!=Sheathe||cracks.size()!=1){
+            qWarning()<<"Tutorial: dash did not leave one crack and start the sheathe lesson";
+            return false;
+        }
+        grab().save(path+"/fracture.png");
         QApplication::sendEvent(this,&down);frames(30);QApplication::sendEvent(this,&up);P cutPosition=hero;
-        mouse(QEvent::MouseButtonPress,dummy,Qt::RightButton,Qt::RightButton);if(hero!=cutPosition||lesson!=Echo||!cracks.isEmpty())return false;
+        mouse(QEvent::MouseButtonPress,dummy,Qt::RightButton,Qt::RightButton);
+        if(hero!=cutPosition||lesson!=Echo||!cracks.isEmpty()){
+            qWarning()<<"Tutorial: sheathe did not consume the crack and start the echo lesson";
+            return false;
+        }
         frames(8);if(sparks.isEmpty()||hit<=0)return false;grab().save(path+"/sparks.png");
         auto walkTo=[&](P goal){
             for(int i=0;i<400&&length(hero-goal)>3;++i){
