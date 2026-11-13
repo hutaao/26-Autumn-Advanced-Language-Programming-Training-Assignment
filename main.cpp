@@ -256,9 +256,17 @@ class Training : public QWidget {
         layoutBranches(n);
     }
     bool clearGuardLine(P from,P to)const{
-        for(QRectF r:stacks)for(QLineF side:{QLineF(r.topLeft(),r.topRight()),QLineF(r.topRight(),r.bottomRight()),QLineF(r.bottomRight(),r.bottomLeft()),QLineF(r.bottomLeft(),r.topLeft())})
-            if(QLineF(from,to).intersects(side,nullptr)==QLineF::BoundedIntersection)return false;
-        return true;
+        const QLineF sight(from,to);
+        auto blocks=[&](QRectF r){
+            if(r.contains(from)||r.contains(to))return true;
+            for(QLineF side:{QLineF(r.topLeft(),r.topRight()),QLineF(r.topRight(),r.bottomRight()),
+                            QLineF(r.bottomRight(),r.bottomLeft()),QLineF(r.bottomLeft(),r.topLeft())})
+                if(sight.intersects(side,nullptr)==QLineF::BoundedIntersection)return true;
+            return false;
+        };
+        if(sector!=2&&blocks(pier))return false;
+        for(const auto &projector:projectors)if(blocks(projector.post))return false;
+        return std::none_of(stacks.cbegin(),stacks.cend(),blocks);
     }
     void pulse(){
         if(lesson<Echo||finished||time-waveStart<1.15)return;
@@ -1110,6 +1118,65 @@ public:
     Training(){resize(1000,615);setMinimumSize(750,462);setMouseTracking(true);setFocusPolicy(Qt::StrongFocus);
         setWindowTitle("光与影");prepareTones();elapsed.start();
         connect(&timer,&QTimer::timeout,this,[this]{tick(std::min(.04,elapsed.restart()/1000.));update();});timer.start(16);}
+    bool verifySmallFixes(){
+        // A blocked dash must still consume a queued cut on existing cracks.
+        beginSector(0,true);slashStart=hero;dashLeft=0;
+        cracks={QLineF(hero-P(20,0),hero)};bufferedCut=true;finishDash();
+        if(bufferedCut||!cracks.isEmpty()||flashes.size()!=1){
+            qWarning()<<"Blocked dash: queued cut was not executed";return false;
+        }
+        // A fast guard must not jump over a thin obstacle between frame endpoints.
+        beginSector(0,true);stacks={QRectF(988,330,1,20)};projectors.clear();
+        guards.clear();addGuard({980,340},true);hero={1005,340};
+        guards[0].state=2;guards[0].attack={1,0};guards[0].timer=.27;
+        runChapter(.04);
+        if(guards[0].pos.x()>=982||!chapterFloor(guards[0].pos)){
+            qWarning()<<"Guard charge crossed an obstacle";return false;
+        }
+        // Losing focus cancels pending input without consuming existing cracks.
+        beginSector(0,true);held.insert(Qt::Key_D);bufferedCut=true;
+        dragging=true;draggedProjector=0;setCursor(Qt::ClosedHandCursor);
+        cracks={QLineF(hero-P(20,0),hero)};
+        QFocusEvent focusLost(QEvent::FocusOut);QApplication::sendEvent(this,&focusLost);
+        if(!held.isEmpty()||bufferedCut||dragging||draggedProjector!=-1||
+           cursor().shape()!=Qt::ArrowCursor||cracks.size()!=1){
+            qWarning()<<"Focus loss left pending input or dragging state";return false;
+        }
+        setCursor(Qt::ClosedHandCursor);reset();
+        if(cursor().shape()!=Qt::ArrowCursor){
+            qWarning()<<"Reset left the dragging cursor active";return false;
+        }
+        // Defeated bosses must not retain invisible lamp blockers or attacks.
+        beginSector(4,true);boss.hp=1;boss.open=1;boss.active=true;
+        boss.globs.push_back({P(1210,465),P(1210,465),true});
+        boss.laserTime=.4;boss.laser=QLineF(boss.core,hero);
+        boss.flight=.5;boss.winding=true;boss.charging=true;
+        flashes={QLineF(boss.core-P(30,0),boss.core+P(30,0))};cutWarden();
+        if(boss.hp!=0||!boss.globs.isEmpty()||lensBlocked()||boss.laserTime!=0||
+           !boss.laser.isNull()||boss.flight!=0||boss.winding||boss.charging){
+            qWarning()<<"Defeated boss retained hazards or lamp blockers";return false;
+        }
+        if(doorOpen()){qWarning()<<"Boss defeat bypassed the passage puzzle";return false;}
+        passageFound=true;stacks.removeOne(shutter);
+        if(!doorOpen()){qWarning()<<"Boss defeat did not unlock the cleared exit";return false;}
+        // Sight uses the same solid columns and lamp posts as movement.
+        beginSector(0,true);stacks.clear();
+        const P abovePier(1215,190),belowPier(1215,246);
+        if(clearGuardLine(abovePier,belowPier)){
+            qWarning()<<"Guard sight crossed the column";return false;
+        }
+        beginSector(2,true);stacks.clear();
+        const P post=projectors.first().post.center();
+        if(clearGuardLine(post-P(0,30),post+P(0,30))||
+           !clearGuardLine(abovePier,belowPier)){
+            qWarning()<<"Guard sight ignored a lamp post or a missing column";return false;
+        }
+        stacks={QRectF(1205,210,20,10)};
+        if(clearGuardLine(abovePier,belowPier)){
+            qWarning()<<"Guard sight crossed a wall";return false;
+        }
+        return true;
+    }
     // Flood-fill the actual collision map. Lamp changes may only be made from dry land.
     bool verifySectorNavigation(){
         constexpr int width=122,height=51,count=width*height;
@@ -1472,47 +1539,7 @@ public:
         boss.hp=4;boss.volley=1;boss.winding=true;boss.clock=0;boss.aim=west;
         stepWarden(.016);if(boss.shots.size()<17)return false;
         grab().save(path+"/warden-barrage.png");
-        // A blocked dash must still consume a queued cut on existing cracks.
-        beginSector(0,true);slashStart=hero;dashLeft=0;
-        cracks={QLineF(hero-P(20,0),hero)};bufferedCut=true;finishDash();
-        if(bufferedCut||!cracks.isEmpty()||flashes.size()!=1){
-            qWarning()<<"Blocked dash: queued cut was not executed";return false;
-        }
-        // A fast guard must not jump over a thin obstacle between frame endpoints.
-        beginSector(0,true);stacks={QRectF(988,330,1,20)};projectors.clear();
-        guards.clear();addGuard({980,340},true);hero={1005,340};
-        guards[0].state=2;guards[0].attack={1,0};guards[0].timer=.27;
-        runChapter(.04);
-        if(guards[0].pos.x()>=982||!chapterFloor(guards[0].pos)){
-            qWarning()<<"Guard charge crossed an obstacle";return false;
-        }
-        // Losing focus cancels pending input without consuming existing cracks.
-        beginSector(0,true);held.insert(Qt::Key_D);bufferedCut=true;
-        dragging=true;draggedProjector=0;setCursor(Qt::ClosedHandCursor);
-        cracks={QLineF(hero-P(20,0),hero)};
-        QFocusEvent focusLost(QEvent::FocusOut);QApplication::sendEvent(this,&focusLost);
-        if(!held.isEmpty()||bufferedCut||dragging||draggedProjector!=-1||
-           cursor().shape()!=Qt::ArrowCursor||cracks.size()!=1){
-            qWarning()<<"Focus loss left pending input or dragging state";return false;
-        }
-        setCursor(Qt::ClosedHandCursor);reset();
-        if(cursor().shape()!=Qt::ArrowCursor){
-            qWarning()<<"Reset left the dragging cursor active";return false;
-        }
-        // Defeated bosses must not retain invisible lamp blockers or attacks.
-        beginSector(4,true);boss.hp=1;boss.open=1;boss.active=true;
-        boss.globs.push_back({P(1210,465),P(1210,465),true});
-        boss.laserTime=.4;boss.laser=QLineF(boss.core,hero);
-        boss.flight=.5;boss.winding=true;boss.charging=true;
-        flashes={QLineF(boss.core-P(30,0),boss.core+P(30,0))};cutWarden();
-        if(boss.hp!=0||!boss.globs.isEmpty()||lensBlocked()||boss.laserTime!=0||
-           !boss.laser.isNull()||boss.flight!=0||boss.winding||boss.charging){
-            qWarning()<<"Defeated boss retained hazards or lamp blockers";return false;
-        }
-        if(doorOpen()){qWarning()<<"Boss defeat bypassed the passage puzzle";return false;}
-        passageFound=true;stacks.removeOne(shutter);
-        if(!doorOpen()){qWarning()<<"Boss defeat did not unlock the cleared exit";return false;}
-        return verifySectorNavigation()&&verifyBlindroomPlaythrough(path);
+        return verifySmallFixes()&&verifySectorNavigation()&&verifyBlindroomPlaythrough(path);
     }
 };
 int main(int argc,char**argv){QApplication app(argc,argv);Training game;
