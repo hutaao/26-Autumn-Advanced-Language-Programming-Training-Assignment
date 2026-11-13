@@ -483,7 +483,7 @@ class Training : public QWidget {
                 moveGuardTo(g,g.home+patrol);
                 if(length(hero-g.pos)<117&&clearGuardLine(g.pos,hero)){g.attack=normalized(hero-g.pos);g.state=1;g.timer=g.fast?.43:.65;}}
             else if(g.state==1){if((g.timer-=dt)<=0){g.state=2;g.timer=.27;}}
-            else if(g.state==2){P next=g.pos+g.attack*(dt*(g.fast?440:320));if(chapterFloor(next)&&(sector>=0||next.x()>1285))g.pos=next;
+            else if(g.state==2){P next=g.pos+g.attack*(dt*(g.fast?440:320));if(sector>=0||next.x()>1285)moveGuardTo(g,next);
                 if(length(hero-g.pos)<22 && immunity<=0 && dashLeft<=0){loseHeart();immunity=1.3;died=hearts<=0;}
                 if((g.timer-=dt)<=0){g.state=3;g.timer=1.2;}}
             else{moveGuardTo(g,g.pos+(g.home-g.pos)*(1-std::exp(-dt*4)));if((g.timer-=dt)<=0)g.state=0;}
@@ -554,7 +554,10 @@ class Training : public QWidget {
     }
     void finishDash(){
         QLineF crack(slashStart,hero);
-        if(crack.length()<3)return;
+        if(crack.length()<3){
+            if(bufferedCut){bufferedCut=false;cut();}
+            return;
+        }
         if(cracks.size()==3){retiringCrack=cracks.takeFirst();retiredAt=time;}
         cracks.push_back(crack);
         if(lesson==Dash){
@@ -1469,6 +1472,20 @@ public:
         boss.hp=4;boss.volley=1;boss.winding=true;boss.clock=0;boss.aim=west;
         stepWarden(.016);if(boss.shots.size()<17)return false;
         grab().save(path+"/warden-barrage.png");
+        // A blocked dash must still consume a queued cut on existing cracks.
+        beginSector(0,true);slashStart=hero;dashLeft=0;
+        cracks={QLineF(hero-P(20,0),hero)};bufferedCut=true;finishDash();
+        if(bufferedCut||!cracks.isEmpty()||flashes.size()!=1){
+            qWarning()<<"Blocked dash: queued cut was not executed";return false;
+        }
+        // A fast guard must not jump over a thin obstacle between frame endpoints.
+        beginSector(0,true);stacks={QRectF(988,330,1,20)};projectors.clear();
+        guards.clear();addGuard({980,340},true);hero={1005,340};
+        guards[0].state=2;guards[0].attack={1,0};guards[0].timer=.27;
+        runChapter(.04);
+        if(guards[0].pos.x()>=982||!chapterFloor(guards[0].pos)){
+            qWarning()<<"Guard charge crossed an obstacle";return false;
+        }
         return verifySectorNavigation()&&verifyBlindroomPlaythrough(path);
     }
 };
