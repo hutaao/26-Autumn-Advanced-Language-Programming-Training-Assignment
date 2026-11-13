@@ -394,7 +394,7 @@ class Training : public QWidget {
         projectors.clear();draggedProjector=-1;
         exitPoint={1685,268};kitPosition=sector==1?P(1720,475):P(1304,340);safeBank={1119,340};calibration=!retry;medkit=true;damageAt=healedAt=-50;
         heard.clear();rays.clear();waveStart=-20;exposure=0;chapter=true;finished=false;lesson=Complete;arrival=time;dragging=false;draggedProjector=-1;unsetCursor();
-        retiredAt=-20;cracks.clear();flashes.clear();dashLeft=flash=hit=cooldown=0;
+        hurtAt=retiredAt=-20;cracks.clear();flashes.clear();dashLeft=flash=hit=cooldown=0;
         stageLamp={805,114};guards.clear();
         for(P at:{P(1410,333),P(1535,315)})guards.push_back({at,at,{},double(guards.size())*2.4});
         for(auto &g:guards)g.hp=1;
@@ -425,6 +425,16 @@ class Training : public QWidget {
         if(sector!=2&&pier.adjusted(-8,-6,8,6).contains(pos))return false;
         for(const Projector &g:projectors)if(g.post.adjusted(-7,-7,7,7).contains(pos))return false;
         for(auto c:channels())if(c.pit.contains(pos))return std::abs(pos.y()-c.crossing)<26&&bridgeShade(pos);return true;
+    }
+    void moveGuardTo(Guard &guard, P target){
+        const P delta=target-guard.pos;
+        const int steps=1+int(length(delta)/4);
+        const P step=delta/steps;
+        for(int i=0;i<steps;++i){
+            const P next=guard.pos+step;
+            if(!chapterFloor(next))break;
+            guard.pos=next;
+        }
     }
     bool cleared()const{return (sector!=4||boss.hp==0)&&std::all_of(guards.begin(),guards.end(),[](const Guard&g){return g.state==4;});}
     bool doorOpen()const{
@@ -470,13 +480,13 @@ class Training : public QWidget {
             if(g.state==0){g.phase+=dt;
                 P patrol=(sector==1)?P(0,std::sin(g.phase*.7)*38):
                     (sector==2&&g.home.x()>1500)?P(35*std::sin(g.phase*.8),0):P(0,std::sin(g.phase)*35);
-                if(chapterFloor(g.home+patrol))g.pos=g.home+patrol;
+                moveGuardTo(g,g.home+patrol);
                 if(length(hero-g.pos)<117&&clearGuardLine(g.pos,hero)){g.attack=normalized(hero-g.pos);g.state=1;g.timer=g.fast?.43:.65;}}
             else if(g.state==1){if((g.timer-=dt)<=0){g.state=2;g.timer=.27;}}
             else if(g.state==2){P next=g.pos+g.attack*(dt*(g.fast?440:320));if(chapterFloor(next)&&(sector>=0||next.x()>1285))g.pos=next;
                 if(length(hero-g.pos)<22 && immunity<=0 && dashLeft<=0){loseHeart();immunity=1.3;died=hearts<=0;}
                 if((g.timer-=dt)<=0){g.state=3;g.timer=1.2;}}
-            else{g.pos+=(g.home-g.pos)*(1-std::exp(-dt*4));if((g.timer-=dt)<=0)g.state=0;}
+            else{moveGuardTo(g,g.pos+(g.home-g.pos)*(1-std::exp(-dt*4)));if((g.timer-=dt)<=0)g.state=0;}
         }
         if(died){if(sector>=0)beginSector(sector,true);else startChapter(true);return;}
         if(doorOpen()&&length(hero-exitPoint)<20){if(sector>=0&&sector<4){beginSector(sector+1,false);return;}finished=true;play(3);}
@@ -887,8 +897,9 @@ class Training : public QWidget {
                     !seal.seen?"圆盘下传来回响。靠近后按空格。":
                     "沿顶端滑轨拖灯，让两道柱影分别盖住同色刻点。";
             }
-            if(sector==3&&!finished)clue=wave==0?(cleared()?"穿过中央环廊。":"青羽守卫冲得更快。侧移，等它冲进裂痕。"):
+            if(sector==3&&!finished)clue=wave==0?(cleared()?"继续向右，进入中央环廊。":"青羽守卫冲得更快。侧移，等它冲进裂痕。"):
                 cleared()?QString():"紫影守卫只在光里受伤。";
+            if(sector==3&&!finished&&wave==0&&reinforcementsAt>=0)clue="增援即将抵达，准备迎战。";
             if(sector==4&&!finished)clue=!boss.hp?QString():boss.open>0?"核心裸露！冲刺穿过青色核心，右键收刀。":!boss.globs.isEmpty()?"冲刺穿过黏球，再收刀清理灯口。":"按住灯向场内瞄准。光束截住激光，持续照射可击破护壳。";
             if(!passageFound&&length(hero-resonance)<150)clue=time>=resonanceAt?"共鸣点已显形。冲刺穿过它，再收刀。":"这里有一道近处的回声。";
             text(p,{camera+80,cameraY()+63,840,28},clue,15,muted,false,Qt::AlignCenter);return;
